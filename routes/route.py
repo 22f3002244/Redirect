@@ -38,7 +38,7 @@ def extract_tables_with_gemini(file_content: str, file_extension: str) -> list:
         )
 
         response = gemini_client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         
@@ -92,7 +92,7 @@ def generate_api_code_with_gemini(table_name: str, method: str, auth_mode: str, 
 Generate the complete endpoint code now:"""
 
         response = gemini_client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         
