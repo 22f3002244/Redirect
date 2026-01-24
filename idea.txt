@@ -1,0 +1,21 @@
+Create base backend code from sql database code
+
+crud Ops:
+POST
+GET
+PATCH
+PUT
+DELETE
+
+auth mode:
+session
+token
+
+code language:
+python
+node
+java
+
+complexity:
+fetching all combinations in one reponse
+
