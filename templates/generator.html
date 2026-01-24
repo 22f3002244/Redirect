@@ -5,10 +5,450 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Generate - Redirect</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        .main {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont;
+            background-color: #ffffff;
+            color: #202124;
+            position: relative;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .main::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(224, 224, 224, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(224, 224, 224, 0.3) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+        }
+
+        .title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 32px;
+            letter-spacing: -0.5px;
+            color: #202124;
+        }
+
+        /* Control Panel */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            background: #ffffff;
+            padding: 10px;
+        }
+
+        .label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #5f6368;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            background: white;
+            font-family: 'Inter', system-ui;
+            font-size: 14px;
+            color: #202124;
+            cursor: pointer;
+        }
+
+        .select:hover {
+            border-color: #202124;
+        }
+
+        .select:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+        }
+
+
+        /* Code Display Area */
+        .code-box {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        #currentLangLabel {
+            font-weight: 500;
+            font-size: 14px;
+            color: #5f6368;
+        }
+
+        .btn-outline-secondary {
+            border-color: #dadce0;
+            background-color: #ffffff;
+            color: #202124;
+            font-family: 'Inter', system-ui;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f8f9fa;
+            border-color: #202124;
+            color: #202124;
+        }
+
+        .btn-outline-secondary.copied {
+            color: #1a73e8;
+            border-color: #1a73e8;
+        }
+
+        .code-container {
+            background: #fff;
+            padding: 24px;
+            min-height: 300px;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #202124;
+        }
+
+        .empty-state {
+            color: #9aa0a6;
+            text-align: center;
+            padding-top: 100px;
+        }
+
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.15em;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 24px 16px;
+            }
+
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+                gap: 16px;
+                padding: 20px;
+            }
+
+            .code-container {
+                padding: 16px;
+            }
+        }
+    </style>
+
 </head>
 
 <body>
+    {% include 'general/nav.html' %}
+    <div class="main">
+        <div class="container">
+            <h1 class="title">HTTPAPI Code Generator</h1>
 
+            <div class="controls">
+                <div>
+                    <label class="label">Table Name</label>
+                    <select class="select" id="tableName">
+                        <option value="" disabled selected>Select table</option>
+                        {% for table in tables %}
+                        <option value="{{ table.lower() }}">{{ table.capitalize() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label">HTTP Methods</label>
+                    <select class="select" id="httpMethod">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label">Auth Mode</label>
+                    <select class="select" id="authMode">
+                        <option value="Session">Session (Cookie)</option>
+                        <option value="Token">Token (JWT)</option>
+                        <option value="OAuth (Google/GitHub login)">OAuth (Google/GitHub login)</option>
+                        <option value="API Keys">API Keys</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label">Framework</label>
+                    <select class="select" id="language">
+                        <option value="" disabled selected>Select Framework</option>
+                        <option value="Flask">Flask</option>
+                        <option value="Django">Django</option>
+                        <option value="FastAPI">FastAPI</option>
+                        <option value="Django REST Framework (DRF)">Django REST Framework (DRF)</option>
+                        <option value="Falcon">Falcon</option>
+                        <option value="Pyramid">Pyramid</option>
+                        <option value="Tornado">Tornado</option>
+                        <option value="Starlette">Starlette</option>
+                        <option value="Sanic">Sanic</option>
+                        <option value="bootle">bootle</option>
+                        <option value="Quart">Quart</option>
+                        <option value="Express.js">Express.js</option>
+                        <option value="NestJS">NestJS</option>
+                        <option value="Fastify">Fastify</option>
+                        <option value="Hapi.js">Hapi.js</option>
+                        <option value="Koa">Koa</option>
+                        <option value="Spring Boot / Spring MVC">Spring Boot / Spring MVC</option>
+                        <option value="Micronaut">Micronaut</option>
+                        <option value="Quarkus">Quarkus</option>
+                        <option value="Dropwizard">Dropwizard</option>
+                        <option value="Javalin">Javalin</option>
+                        <option value="Helidon">Helidon</option>
+                        <option value="Play Framework">Play Framework</option>
+                        <option value="ASP.NET Core">ASP.NET Core</option>
+                        <option value="Minimal APIs">Minimal APIs</option>
+                        <option value="Gin">Gin</option>
+                        <option value="Echo">Echo</option>
+                        <option value="Fiber">Fiber</option>
+                        <option value="Chi">Chi</option>
+                        <option value="Gorilla Mux">Gorilla Mux</option>
+                        <option value="Beego">Beego</option>
+                        <option value="Buffalo">Buffalo</option>
+                        <option value="Revel">Revel</option>
+                        <option value="Ruby on Rails">Ruby on Rails</option>
+                        <option value="Sinatra">Sinatra</option>
+                        <option value="Hanami">Hanami</option>
+                        <option value="Grape">Grape</option>
+                        <option value="Laravel">Laravel</option>
+                        <option value="Symfony">Symfony</option>
+                        <option value="Yii">Yii</option>
+                        <option value="CodeIgniter">CodeIgniter</option>
+                        <option value="Slim">Slim</option>
+                        <option value="Laminas">Laminas</option>
+                        <option value="Ktor">Ktor</option>
+                        <option value="Spring Boot (Kotlin)">Spring Boot (Kotlin)</option>
+                        <option value="Axum">Axum</option>
+                        <option value="Rocket">Rocket</option>
+                        <option value="Warp">Warp</option>
+                        <option value="Phoenix">Phoenix</option>
+                        <option value="Vapor">Vapor</option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-end">
+                    <button id="generateBtn" class="btn btn-dark w-100">
+                        <i class="bi bi-magic pe-2"></i>Generate
+                    </button>
+                </div>
+            </div>
+
+            <div class="code-box">
+                <div class="code-header">
+                    <span id="currentLangLabel">Generated Output</span>
+                    <button class="btn btn-outline-secondary btn-sm" id="copyBtn">
+                        <i class="bi bi-clipboard pe-1"></i><span id="copyBtnText">Copy Code</span>
+                    </button>
+                </div>
+                <div class="code-container">
+                    <pre id="codeContent"
+                        class="empty-state">Select your parameters and click Generate to see the code.</pre>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const generateBtn = document.getElementById('generateBtn');
+            const codeContent = document.getElementById('codeContent');
+            const copyBtn = document.getElementById('copyBtn');
+            const copyBtnText = document.getElementById('copyBtnText');
+            const currentLangLabel = document.getElementById('currentLangLabel');
+            const tableNameSelect = document.getElementById('tableName');
+            
+            // Get project_id from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const projectId = urlParams.get('project_id');
+
+            // Cleanup on page unload (browser close or navigation away)
+            window.addEventListener('beforeunload', async (e) => {
+                // Use sendBeacon for reliable cleanup on page unload
+                navigator.sendBeacon('/api/cleanup');
+            });
+
+            // Cleanup on visibility change (tab close)
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'hidden') {
+                    navigator.sendBeacon('/api/cleanup');
+                }
+            });
+
+            function showNotification(message, type = 'info') {
+                const alertClass = type === 'success' ? 'alert-success' :
+                    type === 'error' ? 'alert-danger' : 'alert-info';
+
+                const notification = document.createElement('div');
+                notification.className = `alert ${alertClass} alert-dismissible fade show`;
+                notification.style.position = 'fixed';
+                notification.style.top = '20px';
+                notification.style.right = '20px';
+                notification.style.zIndex = '9999';
+                notification.style.minWidth = '300px';
+                notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => notification.remove(), 150);
+                }, 3000);
+            }
+
+
+            // Core Generation Function
+            async function generate() {
+                const table = document.getElementById('tableName').value;
+                const method = document.getElementById('httpMethod').value;
+                const auth = document.getElementById('authMode').value;
+                const lang = document.getElementById('language').value;
+
+                if (!table || !method) {
+                    showNotification("Please select a table and method first!", 'error');
+                    return;
+                }
+
+                if (!projectId) {
+                    showNotification("No project loaded. Please upload a file first.", 'error');
+                    return;
+                }
+
+                // Update UI state
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Generating...`;
+                codeContent.innerHTML = `<div style="text-align: center; padding-top: 100px;">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div style="color: #5f6368;">AI is generating your code...</div>
+                </div>`;
+                codeContent.classList.remove('empty-state');
+
+                try {
+                    // Call backend API to generate code with Gemini
+                    const response = await fetch('/api/generate-code', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            table_name: table,
+                            method: method,
+                            auth_mode: auth,
+                            language: lang,
+                            project_id: projectId
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        codeContent.textContent = data.code;
+                        currentLangLabel.textContent = getLangLabel(lang);
+                        showNotification('Code generated successfully!', 'success');
+                    } else {
+                        codeContent.textContent = `// Error: ${data.error}\n// Please try again.`;
+                        showNotification(data.error || 'Failed to generate code', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error generating code:', error);
+                    codeContent.textContent = `// Error: ${error.message}\n// Please check your connection and try again.`;
+                    showNotification('Failed to generate code. Please try again.', 'error');
+                } finally {
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = `<i class="bi bi-magic pe-2"></i>Generate`;
+                }
+            }
+
+            function getLangLabel(lang) {
+                const labels = {
+                    'python': 'Python (FastAPI)',
+                    'javascript': 'Node.js (Express)',
+                    'go': 'Go (Gin)',
+                    'java': 'Java (Spring Boot)'
+                };
+                return labels[lang] || 'Generated Output';
+            }
+
+            // Copy to Clipboard
+            async function copyCode() {
+                const code = codeContent.textContent;
+                if (code.includes("Select your parameters")) return;
+
+                try {
+                    await navigator.clipboard.writeText(code);
+                    copyBtn.classList.add('copied');
+                    copyBtnText.textContent = "Copied!";
+                    setTimeout(() => {
+                        copyBtn.classList.remove('copied');
+                        copyBtnText.textContent = "Copy Code";
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            }
+
+            generateBtn.addEventListener('click', generate);
+            copyBtn.addEventListener('click', copyCode);
+        </script>
+    </div>
+
+    {% include 'general/footer.html' %}
 </body>
 
 </html>

@@ -5,9 +5,350 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Redirect</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont;
+            background-color: #ffffff;
+            color: #202124;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(224, 224, 224, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(224, 224, 224, 0.3) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        section,
+        footer {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero {
+            padding: 240px 0 190px;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            letter-spacing: -0.5px;
+            font-weight: 600;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #5f6368;
+        }
+
+        .btn-primary {
+            background-color: #1a73e8;
+            border: none;
+        }
+
+        .btn-outline-secondary {
+            border-color: #dadce0;
+            background-color: #ffffff;
+            color: #202124;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #f1f3f4;
+            color: #000;
+        }
+
+        .feature-box {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 24px;
+            height: 100%;
+            background-color: #ffffff;
+        }
+
+        .section-title {
+            letter-spacing: -0.3px;
+            font-weight: 600;
+        }
+
+        .muted {
+            color: #5f6368;
+        }
+
+        /* Upload Modal Styles */
+        .upload-box {
+            display: block;
+            border: 2px dashed #dadce0;
+            border-radius: 12px;
+            padding: 50px 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .upload-box:hover {
+            background-color: #f8f9fa;
+            border-color: #1a73e8;
+        }
+
+        .plus-icon {
+            font-size: 48px;
+            color: #5f6368;
+            line-height: 1;
+        }
+
+        .upload-title {
+            font-weight: 500;
+            margin-top: 10px;
+        }
+
+        .file-name {
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: #1a73e8;
+            display: none;
+        }
+
+        .error-text {
+            color: #d93025;
+            font-size: 0.85rem;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Flash Alert */
+        .flash-alert {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1050;
+            min-width: 400px;
+            max-width: 600px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
 </head>
 
 <body>
+
+    <div id="flashContainer"></div>
+
+    {% include 'general/nav.html' %}
+
+    <!-- Hero -->
+    <section class="hero text-center">
+        <div class="container">
+            <h1>Generate REST APIs from SQL</h1>
+            <p class="mt-3">
+                Automatically create secure, production-ready REST APIs from SQL schemas,
+                ORM models, or database tables.
+            </p>
+
+            <div class="mt-4">
+                <a href="#" class="btn btn-primary btn-lg me-2" data-bs-toggle="modal"
+                    data-bs-target="#uploadModal">Upload SQL</a>
+                <a href="#" class="btn btn-outline-secondary btn-lg" onclick="showDatabaseAlert(event)">Connect
+                    Database</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="py-5">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Designed for modern backend development</h2>
+                <p class="muted mt-2">
+                    Focus on your business logic, not repetitive CRUD code.
+                </p>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-box">
+                        <i class="bi bi-database fs-4 text-muted"></i>
+                        <h5 class="mt-3">SQL & database Input</h5>
+                        <p class="muted">
+                            Upload SQL schema and select tables to generate APIs instantly.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="feature-box">
+                        <i class="bi bi-code-slash fs-4 text-muted"></i>
+                        <h5 class="mt-3">Clean REST APIs</h5>
+                        <p class="muted">
+                            Auto-generated GET, POST, PUT, DELETE, and PATCH endpoints.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="feature-box">
+                        <i class="bi bi-globe fs-4 text-muted"></i>
+                        <h5 class="mt-3">Multi-Language Support</h5>
+                        <p class="muted">
+                            Generate code in Python, Node.js, or Java based on your stack.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    {% include 'general/footer.html' %}
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content p-1">
+                <div class="modal-body">
+                    <label class="upload-box text-center w-100">
+                        <input type="file" id="fileInput" hidden accept=".sql,.prisma,.js,.ts,.py,.java,.json" />
+
+                        <div class="plus-icon">+</div>
+                        <div class="upload-title">Upload file</div>
+
+                        <small class="text-muted d-block mt-1">
+                            Supported: .sql, .prisma, .js, .ts, .py, .java, .json
+                        </small>
+
+                        <div class="file-name" id="fileName"></div>
+                        <div class="error-text" id="errorText"></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const errorText = document.getElementById('errorText');
+        const uploadModal = document.getElementById('uploadModal');
+
+        const MAX_SIZE_MB = 5;
+        const allowedExtensions = [
+            'sql', 'prisma', 'js', 'ts', 'py', 'java', 'json'
+        ];
+
+        fileInput.addEventListener('change', async () => {
+            errorText.style.display = 'none';
+            fileName.style.display = 'none';
+
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const extension = file.name.split('.').pop().toLowerCase();
+            const sizeMB = file.size / (1024 * 1024);
+
+            if (!allowedExtensions.includes(extension)) {
+                errorText.textContent = 'Unsupported file type.';
+                errorText.style.display = 'block';
+                fileInput.value = '';
+                return;
+            }
+
+            if (sizeMB > MAX_SIZE_MB) {
+                errorText.textContent = 'File size must be under 5MB.';
+                errorText.style.display = 'block';
+                fileInput.value = '';
+                return;
+            }
+
+            // Show uploading state
+            fileName.textContent = `Uploading ${file.name}...`;
+            fileName.style.display = 'block';
+            fileName.style.color = '#1a73e8';
+
+            // Upload file to backend
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store project ID in localStorage
+                    localStorage.setItem('currentProjectId', data.project_id);
+
+                    // Show success message
+                    fileName.textContent = `✓ ${file.name} uploaded successfully!`;
+                    fileName.style.color = '#0f9d58';
+
+                    // Redirect to generator page after short delay
+                    setTimeout(() => {
+                        window.location.href = `/generate?project_id=${data.project_id}`;
+                    }, 800);
+                } else {
+                    errorText.textContent = data.error || 'Upload failed. Please try again.';
+                    errorText.style.display = 'block';
+                    fileName.style.display = 'none';
+                    fileInput.value = '';
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                errorText.textContent = 'Network error. Please check your connection.';
+                errorText.style.display = 'block';
+                fileName.style.display = 'none';
+                fileInput.value = '';
+            }
+        });
+
+        function showDatabaseAlert(event) {
+            event.preventDefault();
+
+            const flashContainer = document.getElementById('flashContainer');
+
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-info alert-dismissible fade show flash-alert';
+            alert.innerHTML = `
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Coming Soon!</strong> Direct database connection via URL is currently under development and will be available soon. We're working hard to bring you this feature!
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      `;
+
+            flashContainer.appendChild(alert);
+
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => alert.remove(), 150);
+            }, 5000);
+        }
+    </script>
+
 
 </body>
 
