@@ -5,9 +5,12 @@ services:
     region: oregon
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    # OPTIMIZED: 1 worker, longer timeout, thread-based concurrency
+    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300 --worker-class gthread --worker-tmp-dir /dev/shm
     envVars:
       - key: FLASK_ENV
         value: production
       - key: PYTHON_VERSION
         value: 3.11
+      - key: WEB_CONCURRENCY
+        value: 1
