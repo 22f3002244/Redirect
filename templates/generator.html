@@ -156,6 +156,20 @@
             padding-top: 100px;
         }
 
+        .schema-preview {
+            margin-bottom: 24px;
+        }
+
+        .schema-preview pre {
+            max-height: 180px;
+            overflow: auto;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 12px;
+        }
+
         .spinner-border-sm {
             width: 1rem;
             height: 1rem;
@@ -190,6 +204,19 @@
     <div class="main">
         <div class="container">
             <h1 class="title">HTTP API Code Generator</h1>
+
+            {% if extraction_error %}
+            <div class="alert alert-warning" role="alert">
+                {{ extraction_error }} You can retry by refreshing this page.
+            </div>
+            {% endif %}
+
+            {% if schema_preview %}
+            <details class="schema-preview">
+                <summary class="label">View uploaded schema preview</summary>
+                <pre>{{ schema_preview }}</pre>
+            </details>
+            {% endif %}
 
             <div class="controls">
                 <div>

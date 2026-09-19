@@ -5,13 +5,14 @@ import re
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, current_app, jsonify, render_template, request, session
+from sqlalchemy import text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google import genai
 from werkzeug.utils import secure_filename
 
-from models.db import Project, db
+from models.db import GenerationCache, Project, db
 
 load_dotenv()
 
@@ -29,7 +30,6 @@ SUPPORTED_AUTH_MODES = {
     "OAuth (Google/GitHub login)",
     "API Keys",
 }
-generation_cache = {}
 
 
 class GeminiError(RuntimeError):
@@ -176,19 +176,40 @@ def home():
 def generator():
     project_id = request.args.get("project_id")
     project = session_project(project_id)
+    extraction_error = None
+    schema_preview = ""
     if project:
         session["current_project_id"] = project.project_id
+        schema_preview = project.file_content[:5000]
         try:
             if project.extracted_tables is None:
                 project.extracted_tables = extract_tables(project.file_content, project.file_extension)
                 db.session.commit()
             tables = project.extracted_tables or []
-        except GeminiError:
+        except GeminiError as exc:
             tables = []
+            extraction_error = str(exc)
     else:
         tables = []
         project_id = None
-    return render_template("generator.html", tables=tables, project_id=project_id)
+    return render_template(
+        "generator.html",
+        tables=tables,
+        project_id=project_id,
+        extraction_error=extraction_error,
+        schema_preview=schema_preview,
+    )
+
+
+@main.route("/health")
+def health():
+    try:
+        db.session.execute(text("SELECT 1"))
+        return jsonify({"status": "ok", "database": "ok"}), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.warning("Generation cache write failed", exc_info=True)
+        return jsonify({"status": "error", "database": "unavailable"}), 503
 
 
 @main.route("/api/generate-code", methods=["POST"])
@@ -214,9 +235,15 @@ def generate_code():
             schema_context, table_name, method, auth_mode, language
         ]).encode("utf-8")
     ).hexdigest()
-    cached = generation_cache.get(cache_key)
+    cached = GenerationCache.query.filter_by(cache_key=cache_key).first()
     if cached:
-        return jsonify({**cached, "cached": True}), 200
+        return jsonify({
+            "success": True,
+            "code": cached.code,
+            "language": cached.language,
+            "syntax_valid": cached.syntax_valid,
+            "cached": True,
+        }), 200
 
     try:
         code = generate_api_code_with_gemini(
@@ -225,17 +252,24 @@ def generate_code():
     except GeminiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
 
-    result = {
+    syntax_valid = validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None
+    try:
+        db.session.add(GenerationCache(
+            cache_key=cache_key,
+            code=code,
+            language=language,
+            syntax_valid=syntax_valid,
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return jsonify({
         "success": True,
         "code": code,
         "language": language,
-        "syntax_valid": validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None,
+        "syntax_valid": syntax_valid,
         "cached": False,
-    }
-    if len(generation_cache) >= 100:
-        generation_cache.pop(next(iter(generation_cache)))
-    generation_cache[cache_key] = result
-    return jsonify(result), 200
+    }), 200
 
 
 @main.route("/api/upload", methods=["POST"])
