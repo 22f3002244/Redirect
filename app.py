@@ -34,8 +34,8 @@ def create_app():
     if not database_url.startswith("sqlite"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"].update({
             "pool_recycle": 300,
-            "pool_size": 10,
-            "max_overflow": 20,
+            "pool_size": 2,
+            "max_overflow": 0,
         })
     
     # Session configuration

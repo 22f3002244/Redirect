@@ -19,6 +19,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 ALLOWED_EXTENSIONS = {"sql", "prisma", "js", "ts", "py", "java", "json"}
 MAX_FILE_SIZE = 5 * 1024 * 1024
+MAX_AI_INPUT_SIZE = 200_000
 PROJECT_TTL = timedelta(hours=24)
 SUPPORTED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 SUPPORTED_AUTH_MODES = {
@@ -80,6 +81,11 @@ def extract_tables(file_content, file_extension):
 
 
 def generate_api_code_with_gemini(table_name, method, auth_mode, language, file_content):
+    if len(file_content) > MAX_AI_INPUT_SIZE:
+        raise GeminiError(
+            "This schema is too large to process on the free-tier server. "
+            "Please upload a schema smaller than 200,000 characters."
+        )
     prompt = f"""You are an expert backend developer. Generate a production-ready API endpoint function.
 Table: {table_name}
 HTTP Method: {method}

@@ -5,8 +5,8 @@ services:
     region: oregon
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    # OPTIMIZED: 1 worker, longer timeout, thread-based concurrency
-    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300 --worker-class gthread --worker-tmp-dir /dev/shm
+    # Keep memory usage predictable on Render's free tier.
+    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 --worker-class gthread --worker-tmp-dir /dev/shm
     envVars:
       - key: FLASK_ENV
         value: production
