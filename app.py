@@ -31,6 +31,7 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["RATELIMIT_ENABLED"] = flask_env != "testing"
+    app.config["TESTING"] = flask_env == "testing"
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
     if not database_url.startswith("sqlite"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"].update({
@@ -49,6 +50,13 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
     limiter.init_app(app)
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
 
     with app.app_context():
         if flask_env == "development":

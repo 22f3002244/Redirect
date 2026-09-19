@@ -23,6 +23,8 @@ ALLOWED_EXTENSIONS = {"sql", "prisma", "js", "ts", "py", "java", "json"}
 MAX_FILE_SIZE = 5 * 1024 * 1024
 MAX_AI_INPUT_SIZE = 200_000
 PROJECT_TTL = timedelta(hours=24)
+CACHE_TTL = timedelta(days=7)
+SESSION_GENERATION_LIMIT = 20
 SUPPORTED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 SUPPORTED_AUTH_MODES = {
     "Session",
@@ -30,6 +32,18 @@ SUPPORTED_AUTH_MODES = {
     "OAuth (Google/GitHub login)",
     "API Keys",
 }
+SAMPLE_SCHEMA = """CREATE TABLE users (
+    id INT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE posts (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);"""
 
 
 class GeminiError(RuntimeError):
@@ -158,6 +172,27 @@ def purge_expired_projects():
     db.session.commit()
 
 
+def purge_expired_cache():
+    cutoff = datetime.utcnow() - CACHE_TTL
+    GenerationCache.query.filter(GenerationCache.created_at < cutoff).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+
+
+def csrf_is_valid():
+    return (
+        current_app.config.get("TESTING")
+        or request.headers.get("X-CSRF-Token") == session.get("csrf_token")
+    )
+
+
+def csrf_error():
+    if not csrf_is_valid():
+        return jsonify({"success": False, "error": "Invalid security token"}), 403
+    return None
+
+
 def session_project(project_id=None):
     current_id = session.get("current_project_id")
     if project_id and current_id != project_id:
@@ -169,6 +204,7 @@ def session_project(project_id=None):
 
 @main.route("/")
 def home():
+    session.setdefault("csrf_token", os.urandom(24).hex())
     return render_template("home.html")
 
 
@@ -179,6 +215,7 @@ def generator():
     extraction_error = None
     schema_preview = ""
     if project:
+        session.setdefault("csrf_token", os.urandom(24).hex())
         session["current_project_id"] = project.project_id
         schema_preview = project.file_content[:5000]
         try:
@@ -208,13 +245,16 @@ def health():
         return jsonify({"status": "ok", "database": "ok"}), 200
     except Exception:
         db.session.rollback()
-        current_app.logger.warning("Generation cache write failed", exc_info=True)
+        current_app.logger.warning("Health check database query failed", exc_info=True)
         return jsonify({"status": "error", "database": "unavailable"}), 503
 
 
 @main.route("/api/generate-code", methods=["POST"])
 @limiter.limit("10 per minute")
 def generate_code():
+    error = csrf_error()
+    if error:
+        return error
     data = request.get_json(silent=True) or {}
     table_name = data.get("table_name")
     method = data.get("method")
@@ -228,6 +268,17 @@ def generate_code():
         return jsonify({"success": False, "error": "Invalid method or authentication mode"}), 400
     if not project:
         return jsonify({"success": False, "error": "Project not found or session expired"}), 404
+    known_tables = project.extracted_tables or extract_tables_deterministically(
+        project.file_content, project.file_extension
+    )
+    if known_tables and not any(table.lower() == table_name.lower() for table in known_tables):
+        return jsonify({"success": False, "error": "Selected table was not found in the schema"}), 400
+    generation_count = session.get("generation_count", 0)
+    if generation_count >= SESSION_GENERATION_LIMIT:
+        return jsonify({
+            "success": False,
+            "error": "Session generation limit reached. Upload a new schema to continue.",
+        }), 429
 
     schema_context = schema_for_table(project.file_content, project.file_extension, table_name)
     cache_key = hashlib.sha256(
@@ -251,6 +302,7 @@ def generate_code():
         )
     except GeminiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
+    session["generation_count"] = generation_count + 1
 
     syntax_valid = validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None
     try:
@@ -275,8 +327,12 @@ def generate_code():
 @main.route("/api/upload", methods=["POST"])
 @limiter.limit("10 per hour")
 def upload_file():
+    error = csrf_error()
+    if error:
+        return error
     try:
         purge_expired_projects()
+        purge_expired_cache()
         if "file" not in request.files:
             return jsonify({"success": False, "error": "No file provided"}), 400
         file = request.files["file"]
@@ -302,6 +358,7 @@ def upload_file():
         db.session.add(project)
         db.session.commit()
         session["current_project_id"] = project.project_id
+        session["generation_count"] = 0
         return jsonify({
             "success": True,
             "project_id": project.project_id,
@@ -313,8 +370,44 @@ def upload_file():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+@main.route("/api/sample-upload", methods=["POST"])
+@limiter.limit("10 per hour")
+def sample_upload():
+    error = csrf_error()
+    if error:
+        return error
+    try:
+        purge_expired_projects()
+        purge_expired_cache()
+        old_project = session_project()
+        if old_project:
+            db.session.delete(old_project)
+        project = Project(
+            filename="sample.sql",
+            file_content=SAMPLE_SCHEMA,
+            file_extension="sql",
+            extracted_tables=["users", "posts"],
+        )
+        db.session.add(project)
+        db.session.commit()
+        session["current_project_id"] = project.project_id
+        session["generation_count"] = 0
+        return jsonify({
+            "success": True,
+            "project_id": project.project_id,
+            "filename": project.filename,
+            "message": "Sample schema loaded",
+        }), 201
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @main.route("/api/cleanup", methods=["POST"])
 def cleanup_project():
+    error = csrf_error()
+    if error:
+        return error
     project = session_project()
     if project:
         db.session.delete(project)

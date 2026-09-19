@@ -24,6 +24,7 @@ Transform database schemas into fully functional REST API code. Upload your sche
 - **Free response cache**: Repeated generations are served from a bounded in-memory cache
 - **Downloadable output**: Save generated endpoints directly as framework-appropriate files
 - **Health monitoring**: Check application and database readiness at `/health`
+- **Free sample demo**: Try the built-in sample schema without preparing a file
 
 ## Project Structure
 
@@ -90,6 +91,9 @@ Access at `http://localhost:5000`
 4. **Copy or download** the generated endpoint
 5. **Build** your actual features on this foundation
 
+Use **Try Sample Schema** on the home page to test the complete flow immediately with a
+small `users` and `posts` schema.
+
 For SQL and Prisma files, Redirect first extracts table names locally and sends only the
 selected table context to Gemini. Repeating the same generation request during the
 running server process uses the local cache and does not call Gemini again. The cache is
@@ -141,6 +145,8 @@ Database schema changes are managed with Flask-Migrate. Deployments run
 Uploaded projects belong to the current browser session and expire automatically after
 24 hours. Switching tabs does not delete the project. AI failures return HTTP 502 instead
 of being embedded in generated source code.
+Generated responses are cached for up to seven days, and each session has a 20-generation
+AI limit to protect free-tier quota.
 
 ## Technologies
 
