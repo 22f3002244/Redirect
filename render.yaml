@@ -14,3 +14,5 @@ services:
         value: 3.11
       - key: WEB_CONCURRENCY
         value: 1
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash

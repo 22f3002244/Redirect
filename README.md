@@ -74,6 +74,8 @@ FLASK_APP=app.py
 FLASK_ENV=development
 SECRET_KEY=your-secret-key
 GEMINI_API_KEY=your-gemini-api-key
+# Optional; defaults to gemini-2.0-flash
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
 5. Run:

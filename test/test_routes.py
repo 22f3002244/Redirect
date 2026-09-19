@@ -141,3 +141,14 @@ def test_cache_cleanup_tolerates_database_schema_errors(client):
             with patch("routes.route.GenerationCache.query") as query:
                 query.filter.side_effect = SQLAlchemyError("missing table")
                 purge_expired_cache()
+
+
+def test_gemini_model_can_be_configured(client, monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    with patch("routes.route.get_gemini_client") as get_client:
+        get_client.return_value.models.generate_content.return_value.text = "users"
+        from routes.route import extract_tables_with_gemini
+
+        extract_tables_with_gemini("schema", "sql")
+        get_client.return_value.models.generate_content.assert_called_once()
+        assert get_client.return_value.models.generate_content.call_args.kwargs["model"] == "test-model"

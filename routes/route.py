@@ -85,10 +85,13 @@ def extract_tables_with_gemini(file_content, file_extension):
     )
     try:
         response = get_gemini_client().models.generate_content(
-            model="gemini-2.5-flash", contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"), contents=prompt
         )
         return [name.strip() for name in response.text.split(",") if name.strip()]
     except Exception as exc:
+        current_app.logger.warning(
+            "Gemini table extraction failed: %s", exc.__class__.__name__, exc_info=True
+        )
         raise GeminiError("The AI service could not extract tables. Please try again.") from exc
 
 
@@ -146,7 +149,7 @@ Implement authentication, CRUD behavior, error handling, JSON responses with suc
 appropriate status codes, and close database connections in a finally block."""
     try:
         response = get_gemini_client().models.generate_content(
-            model="gemini-2.5-flash", contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"), contents=prompt
         )
         code = response.text.strip()
         if code.startswith("```"):
@@ -156,6 +159,9 @@ appropriate status codes, and close database connections in a finally block."""
             code = "\n".join(lines).strip()
         return code
     except Exception as exc:
+        current_app.logger.warning(
+            "Gemini code generation failed: %s", exc.__class__.__name__, exc_info=True
+        )
         raise GeminiError("The AI service could not generate code. Please try again.") from exc
 
 
