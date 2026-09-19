@@ -85,7 +85,7 @@ def extract_tables_with_gemini(file_content, file_extension):
     )
     try:
         response = get_gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"), contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"), contents=prompt
         )
         return [name.strip() for name in response.text.split(",") if name.strip()]
     except Exception as exc:
@@ -149,7 +149,7 @@ Implement authentication, CRUD behavior, error handling, JSON responses with suc
 appropriate status codes, and close database connections in a finally block."""
     try:
         response = get_gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"), contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"), contents=prompt
         )
         code = response.text.strip()
         if code.startswith("```"):
