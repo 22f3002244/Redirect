@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from routes.route import GeminiError
+from routes.route import GeminiError, schema_for_table
 
 from conftest import upload
 
@@ -63,3 +63,15 @@ def test_sql_tables_are_extracted_without_gemini(client):
         response = client.get("/generate")
     assert response.status_code == 200
     gemini.assert_not_called()
+
+
+def test_sql_prompt_context_is_limited_to_selected_and_related_tables():
+    schema = """
+    CREATE TABLE users (id INT PRIMARY KEY);
+    CREATE TABLE posts (id INT, user_id INT, FOREIGN KEY (user_id) REFERENCES users(id));
+    CREATE TABLE audit_log (id INT, message TEXT);
+    """
+    context = schema_for_table(schema, "sql", "users")
+    assert "CREATE TABLE users" in context
+    assert "CREATE TABLE posts" in context
+    assert "audit_log" not in context

@@ -293,6 +293,9 @@
                     <button class="btn btn-outline-secondary btn-sm" id="copyBtn">
                         <i class="bi bi-clipboard pe-1"></i><span id="copyBtnText">Copy Code</span>
                     </button>
+                    <button class="btn btn-outline-secondary btn-sm ms-2" id="downloadBtn">
+                        <i class="bi bi-download pe-1"></i>Download
+                    </button>
                 </div>
                 <div class="code-container">
                     <pre id="codeContent"
@@ -306,6 +309,7 @@
             const codeContent = document.getElementById('codeContent');
             const copyBtn = document.getElementById('copyBtn');
             const copyBtnText = document.getElementById('copyBtnText');
+            const downloadBtn = document.getElementById('downloadBtn');
             const currentLangLabel = document.getElementById('currentLangLabel');
             const tableNameSelect = document.getElementById('tableName');
             
@@ -402,7 +406,7 @@
                     if (data.success) {
                         codeContent.textContent = data.code;
                         currentLangLabel.textContent = getLangLabel(lang);
-                        showNotification('Code generated successfully!', 'success');
+                        showNotification(data.cached ? 'Loaded cached code.' : 'Code generated successfully!', 'success');
                     } else {
                         codeContent.textContent = `Generation failed: ${data.error}`;
                         showNotification(data.error || 'Failed to generate code', 'error');
@@ -441,6 +445,29 @@
 
             generateBtn.addEventListener('click', generate);
             copyBtn.addEventListener('click', copyCode);
+            downloadBtn.addEventListener('click', () => {
+                const code = codeContent.textContent;
+                if (!code || code.includes("Select your parameters") || code.startsWith("Generation failed:")) {
+                    showNotification('Generate code before downloading.', 'error');
+                    return;
+                }
+                const extension = getFileExtension(lang);
+                const blob = new Blob([code], { type: 'text/plain' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `generated-${tableNameSelect.value || 'endpoint'}.${extension}`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            });
+
+            function getFileExtension(framework) {
+                if (['Flask', 'Django', 'FastAPI', 'Falcon', 'Pyramid', 'Tornado', 'Starlette', 'Sanic', 'Quart'].includes(framework)) return 'py';
+                if (['Express.js', 'NestJS', 'Fastify', 'Hapi.js', 'Koa'].includes(framework)) return 'js';
+                if (['Gin', 'Echo', 'Fiber', 'Chi', 'Gorilla Mux', 'Beego', 'Buffalo', 'Revel'].includes(framework)) return 'go';
+                if (['Ruby on Rails', 'Sinatra', 'Hanami', 'Grape'].includes(framework)) return 'rb';
+                if (['Laravel', 'Symfony', 'Yii', 'CodeIgniter', 'Slim', 'Laminas'].includes(framework)) return 'php';
+                return 'txt';
+            }
         </script>
     </div>
 
