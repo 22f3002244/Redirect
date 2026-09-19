@@ -22,3 +22,13 @@ class Project(db.Model):
             'extracted_tables': self.extracted_tables or [],
             'created_at': self.created_at.isoformat()
         }
+
+
+class GenerationCache(db.Model):
+    __tablename__ = "generation_cache"
+    id = db.Column(db.Integer, primary_key=True)
+    cache_key = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    code = db.Column(db.Text, nullable=False)
+    language = db.Column(db.String(100), nullable=False)
+    syntax_valid = db.Column(db.Boolean, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

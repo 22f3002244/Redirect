@@ -23,6 +23,7 @@ Transform database schemas into fully functional REST API code. Upload your sche
 - **Focused prompts**: SQL and Prisma requests include the selected table and related tables
 - **Free response cache**: Repeated generations are served from a bounded in-memory cache
 - **Downloadable output**: Save generated endpoints directly as framework-appropriate files
+- **Health monitoring**: Check application and database readiness at `/health`
 
 ## Project Structure
 
@@ -128,6 +129,14 @@ required in the generation request.
 ```
 POST /api/cleanup
 ```
+
+**Health check**
+```
+GET /health
+```
+
+Database schema changes are managed with Flask-Migrate. Deployments run
+`flask --app app db upgrade` before starting the web process.
 
 Uploaded projects belong to the current browser session and expire automatically after
 24 hours. Switching tabs does not delete the project. AI failures return HTTP 502 instead

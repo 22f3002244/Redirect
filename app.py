@@ -2,6 +2,7 @@ from flask import Flask
 from routes.route import main
 from models.db import db
 from routes.route import limiter
+from flask_migrate import Migrate
 import os
 from dotenv import load_dotenv
 
@@ -46,16 +47,13 @@ def create_app():
     
     # Initialize extensions
     db.init_app(app)
+    Migrate(app, db)
     limiter.init_app(app)
 
-    # Create tables (only in development)
     with app.app_context():
         if flask_env == "development":
             db.create_all()
-            print("✓ Database tables created/verified")
-        else:
-            # In production, use migrations instead
-            print("✓ Database connection established")
+        print("Database connection established")
     
     # Register blueprints
     app.register_blueprint(main)

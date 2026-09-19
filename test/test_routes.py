@@ -75,3 +75,28 @@ def test_sql_prompt_context_is_limited_to_selected_and_related_tables():
     assert "CREATE TABLE users" in context
     assert "CREATE TABLE posts" in context
     assert "audit_log" not in context
+
+
+def test_health_endpoint_checks_database(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "ok", "database": "ok"}
+
+
+def test_generated_code_is_persisted_in_cache(client):
+    assert upload(client).status_code == 201
+    with patch(
+        "routes.route.generate_api_code_with_gemini",
+        return_value="def endpoint():\n    return {'ok': True}",
+    ) as generate:
+        payload = {
+            "table_name": "users",
+            "method": "GET",
+            "auth_mode": "Token",
+            "language": "FastAPI",
+        }
+        first = client.post("/api/generate-code", json=payload)
+        second = client.post("/api/generate-code", json=payload)
+    assert first.get_json()["cached"] is False
+    assert second.get_json()["cached"] is True
+    generate.assert_called_once()
