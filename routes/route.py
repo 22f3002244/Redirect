@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import os
 import re
 from datetime import datetime, timedelta
@@ -28,6 +29,7 @@ SUPPORTED_AUTH_MODES = {
     "OAuth (Google/GitHub login)",
     "API Keys",
 }
+generation_cache = {}
 
 
 class GeminiError(RuntimeError):
@@ -78,6 +80,34 @@ def extract_tables_with_gemini(file_content, file_extension):
 def extract_tables(file_content, file_extension):
     tables = extract_tables_deterministically(file_content, file_extension)
     return tables or extract_tables_with_gemini(file_content, file_extension)
+
+
+def schema_for_table(file_content, file_extension, table_name):
+    """Keep AI prompts small by sending the selected table and nearby relations."""
+    if file_extension == "sql":
+        blocks = re.findall(
+            r"\bCREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+[`\"']?[\w$]+.*?(?:;|$)",
+            file_content,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        selected = [
+            block for block in blocks
+            if re.search(rf"\b{re.escape(table_name)}\b", block, flags=re.IGNORECASE)
+        ]
+        related = [
+            block for block in blocks
+            if re.search(rf"\bREFERENCES\s+[`\"']?{re.escape(table_name)}\b", block, flags=re.IGNORECASE)
+        ]
+        context = "\n\n".join(dict.fromkeys(selected + related))
+        return context or file_content
+    if file_extension == "prisma":
+        match = re.search(
+            rf"^\s*model\s+{re.escape(table_name)}\b.*?(?=^\s*model\s+|\Z)",
+            file_content,
+            flags=re.IGNORECASE | re.MULTILINE | re.DOTALL,
+        )
+        return match.group(0).strip() if match else file_content
+    return file_content
 
 
 def generate_api_code_with_gemini(table_name, method, auth_mode, language, file_content):
@@ -178,19 +208,34 @@ def generate_code():
     if not project:
         return jsonify({"success": False, "error": "Project not found or session expired"}), 404
 
+    schema_context = schema_for_table(project.file_content, project.file_extension, table_name)
+    cache_key = hashlib.sha256(
+        "|".join([
+            schema_context, table_name, method, auth_mode, language
+        ]).encode("utf-8")
+    ).hexdigest()
+    cached = generation_cache.get(cache_key)
+    if cached:
+        return jsonify({**cached, "cached": True}), 200
+
     try:
         code = generate_api_code_with_gemini(
-            table_name, method, auth_mode, language, project.file_content
+            table_name, method, auth_mode, language, schema_context
         )
     except GeminiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
 
-    return jsonify({
+    result = {
         "success": True,
         "code": code,
         "language": language,
         "syntax_valid": validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None,
-    }), 200
+        "cached": False,
+    }
+    if len(generation_cache) >= 100:
+        generation_cache.pop(next(iter(generation_cache)))
+    generation_cache[cache_key] = result
+    return jsonify(result), 200
 
 
 @main.route("/api/upload", methods=["POST"])
