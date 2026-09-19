@@ -100,3 +100,23 @@ def test_generated_code_is_persisted_in_cache(client):
     assert first.get_json()["cached"] is False
     assert second.get_json()["cached"] is True
     generate.assert_called_once()
+
+
+def test_sample_upload_creates_a_project(client):
+    response = client.post("/api/sample-upload")
+    assert response.status_code == 201
+    assert response.get_json()["filename"] == "sample.sql"
+
+
+def test_generation_rejects_unknown_table(client):
+    assert upload(client).status_code == 201
+    response = client.post(
+        "/api/generate-code",
+        json={
+            "table_name": "unknown",
+            "method": "GET",
+            "auth_mode": "Token",
+            "language": "FastAPI",
+        },
+    )
+    assert response.status_code == 400
