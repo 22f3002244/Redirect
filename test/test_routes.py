@@ -120,3 +120,12 @@ def test_generation_rejects_unknown_table(client):
         },
     )
     assert response.status_code == 400
+
+
+def test_sample_upload_tolerates_missing_generation_cache_table(client):
+    from models.db import GenerationCache, db
+
+    with client.application.app_context():
+        GenerationCache.__table__.drop(db.engine)
+    response = client.post("/api/sample-upload")
+    assert response.status_code == 201

@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt && flask --app app db upgrade
     # Keep memory usage predictable on Render's free tier.
-    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 --worker-class gthread --worker-tmp-dir /dev/shm
+    startCommand: flask --app app db upgrade && gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 --worker-class gthread --worker-tmp-dir /dev/shm
     envVars:
       - key: FLASK_ENV
         value: production

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from flask import Blueprint, current_app, jsonify, render_template, request, session
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google import genai
@@ -173,6 +173,9 @@ def purge_expired_projects():
 
 
 def purge_expired_cache():
+    if "generation_cache" not in inspect(db.engine).get_table_names():
+        current_app.logger.warning("Generation cache table is missing; skipping cache cleanup")
+        return
     cutoff = datetime.utcnow() - CACHE_TTL
     GenerationCache.query.filter(GenerationCache.created_at < cutoff).delete(
         synchronize_session=False
@@ -286,7 +289,12 @@ def generate_code():
             schema_context, table_name, method, auth_mode, language
         ]).encode("utf-8")
     ).hexdigest()
-    cached = GenerationCache.query.filter_by(cache_key=cache_key).first()
+    cache_available = "generation_cache" in inspect(db.engine).get_table_names()
+    cached = (
+        GenerationCache.query.filter_by(cache_key=cache_key).first()
+        if cache_available
+        else None
+    )
     if cached:
         return jsonify({
             "success": True,
@@ -306,6 +314,15 @@ def generate_code():
 
     syntax_valid = validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None
     try:
+        if not cache_available:
+            current_app.logger.warning("Generation cache table is missing; returning uncached result")
+            return jsonify({
+                "success": True,
+                "code": code,
+                "language": language,
+                "syntax_valid": syntax_valid,
+                "cached": False,
+            }), 200
         db.session.add(GenerationCache(
             cache_key=cache_key,
             code=code,
