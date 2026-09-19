@@ -313,19 +313,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             const projectId = urlParams.get('project_id');
 
-            // Cleanup on page unload (browser close or navigation away)
-            window.addEventListener('beforeunload', async (e) => {
-                // Use sendBeacon for reliable cleanup on page unload
-                navigator.sendBeacon('/api/cleanup');
-            });
-
-            // Cleanup on visibility change (tab close)
-            document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState === 'hidden') {
-                    navigator.sendBeacon('/api/cleanup');
-                }
-            });
-
             function showNotification(message, type = 'info') {
                 const alertClass = type === 'success' ? 'alert-success' :
                     type === 'error' ? 'alert-danger' : 'alert-info';
@@ -391,7 +378,6 @@
                             method: method,
                             auth_mode: auth,
                             language: lang,
-                            project_id: projectId
                         })
                     });
 
@@ -402,12 +388,12 @@
                         currentLangLabel.textContent = getLangLabel(lang);
                         showNotification('Code generated successfully!', 'success');
                     } else {
-                        codeContent.textContent = `// Error: ${data.error}\n// Please try again.`;
+                        codeContent.textContent = `Generation failed: ${data.error}`;
                         showNotification(data.error || 'Failed to generate code', 'error');
                     }
                 } catch (error) {
                     console.error('Error generating code:', error);
-                    codeContent.textContent = `// Error: ${error.message}\n// Please check your connection and try again.`;
+                    codeContent.textContent = `Generation failed: ${error.message}`;
                     showNotification('Failed to generate code. Please try again.', 'error');
                 } finally {
                     generateBtn.disabled = false;
@@ -416,13 +402,7 @@
             }
 
             function getLangLabel(lang) {
-                const labels = {
-                    'python': 'Python (FastAPI)',
-                    'javascript': 'Node.js (Express)',
-                    'go': 'Go (Gin)',
-                    'java': 'Java (Spring Boot)'
-                };
-                return labels[lang] || 'Generated Output';
+                return lang || 'Generated Output';
             }
 
             // Copy to Clipboard

@@ -86,6 +86,11 @@ Access at `http://localhost:5000`
 4. **Copy** and integrate into your project
 5. **Build** your actual features on this foundation
 
+The sample schema is available at [`test/sample.sql`](test/sample.sql). The free Render
+deployment may take several seconds to wake from a cold start. Configure `SECRET_KEY`,
+`DATABASE_URL`, and `GEMINI_API_KEY` as Render environment variables before testing the
+end-to-end flow.
+
 ## API Endpoints
 
 **Upload Schema**
@@ -114,12 +119,17 @@ Body:
 POST /api/cleanup
 ```
 
+Uploaded projects belong to the current browser session and expire automatically after
+24 hours. Switching tabs does not delete the project. AI failures return HTTP 502 instead
+of being embedded in generated source code.
+
 ## Technologies
 
 - Backend: Python Flask
 - Frontend: HTML, CSS, JavaScript
 - AI: Google Gemini API
 - Styling: Bootstrap 5.3.2
+- Testing: pytest and GitHub Actions
 
 ## Contributing
 

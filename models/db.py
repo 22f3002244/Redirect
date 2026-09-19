@@ -11,6 +11,7 @@ class Project(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     file_content = db.Column(db.Text, nullable=False)
     file_extension = db.Column(db.String(10), nullable=False)
+    extracted_tables = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -18,6 +19,6 @@ class Project(db.Model):
             'project_id': self.project_id,
             'filename': self.filename,
             'file_extension': self.file_extension,
+            'extracted_tables': self.extracted_tables or [],
             'created_at': self.created_at.isoformat()
         }
-
