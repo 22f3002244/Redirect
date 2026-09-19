@@ -381,7 +381,23 @@
                         })
                     });
 
-                    const data = await response.json();
+                    const responseText = await response.text();
+                    let data;
+                    try {
+                        data = responseText ? JSON.parse(responseText) : null;
+                    } catch (parseError) {
+                        throw new Error(
+                            `Server returned an invalid response (HTTP ${response.status}).`
+                        );
+                    }
+
+                    if (!response.ok || !data) {
+                        throw new Error(
+                            data && data.error
+                                ? data.error
+                                : `Request failed (HTTP ${response.status}).`
+                        );
+                    }
 
                     if (data.success) {
                         codeContent.textContent = data.code;
