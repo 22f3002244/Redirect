@@ -129,3 +129,15 @@ def test_sample_upload_tolerates_missing_generation_cache_table(client):
         GenerationCache.__table__.drop(db.engine)
     response = client.post("/api/sample-upload")
     assert response.status_code == 201
+
+
+def test_cache_cleanup_tolerates_database_schema_errors(client):
+    from routes.route import purge_expired_cache
+    from sqlalchemy.exc import SQLAlchemyError
+
+    with client.application.app_context():
+        with patch("routes.route.inspect") as inspect_mock:
+            inspect_mock.return_value.get_table_names.return_value = ["generation_cache"]
+            with patch("routes.route.GenerationCache.query") as query:
+                query.filter.side_effect = SQLAlchemyError("missing table")
+                purge_expired_cache()

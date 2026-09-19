@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask import Blueprint, current_app, jsonify, render_template, request, session
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google import genai
@@ -173,14 +174,18 @@ def purge_expired_projects():
 
 
 def purge_expired_cache():
-    if "generation_cache" not in inspect(db.engine).get_table_names():
-        current_app.logger.warning("Generation cache table is missing; skipping cache cleanup")
-        return
-    cutoff = datetime.utcnow() - CACHE_TTL
-    GenerationCache.query.filter(GenerationCache.created_at < cutoff).delete(
-        synchronize_session=False
-    )
-    db.session.commit()
+    try:
+        if "generation_cache" not in inspect(db.engine).get_table_names():
+            current_app.logger.warning("Generation cache table is missing; skipping cache cleanup")
+            return
+        cutoff = datetime.utcnow() - CACHE_TTL
+        GenerationCache.query.filter(GenerationCache.created_at < cutoff).delete(
+            synchronize_session=False
+        )
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.warning("Cache cleanup skipped because the cache table is unavailable", exc_info=True)
 
 
 def csrf_is_valid():
