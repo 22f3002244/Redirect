@@ -1,6 +1,7 @@
 from flask import Flask
 from routes.route import main
 from models.db import db
+from routes.route import limiter
 import os
 from dotenv import load_dotenv
 
@@ -28,23 +29,24 @@ def create_app():
     
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_pre_ping": True,  # Verify connections before using
-        "pool_recycle": 300,     # Recycle connections after 5 minutes
-        "pool_size": 10,         # Connection pool size
-        "max_overflow": 20       # Max connections beyond pool_size
-    }
+    app.config["RATELIMIT_ENABLED"] = flask_env != "testing"
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+    if not database_url.startswith("sqlite"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"].update({
+            "pool_recycle": 300,
+            "pool_size": 10,
+            "max_overflow": 20,
+        })
     
     # Session configuration
-    app.config["SESSION_TYPE"] = "filesystem"
     app.config["SESSION_PERMANENT"] = False
-    app.config["SESSION_USE_SIGNER"] = True
     app.config["SESSION_COOKIE_SECURE"] = flask_env == "production"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     
     # Initialize extensions
     db.init_app(app)
+    limiter.init_app(app)
 
     # Create tables (only in development)
     with app.app_context():
