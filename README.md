@@ -20,6 +20,9 @@ Transform database schemas into fully functional REST API code. Upload your sche
 - **HTTP Methods**: GET, POST, PUT, PATCH, DELETE
 - **Authentication**: Session (Cookie), Token (JWT), OAuth, API Keys
 - **AI-Powered**: Clean, idiomatic code for your chosen framework
+- **Focused prompts**: SQL and Prisma requests include the selected table and related tables
+- **Free response cache**: Repeated generations are served from a bounded in-memory cache
+- **Downloadable output**: Save generated endpoints directly as framework-appropriate files
 
 ## Project Structure
 
@@ -83,8 +86,13 @@ Access at `http://localhost:5000`
 1. **Upload** your database schema (max 5MB)
 2. **Select** table, HTTP method, auth mode, and framework
 3. **Generate** clean API code
-4. **Copy** and integrate into your project
+4. **Copy or download** the generated endpoint
 5. **Build** your actual features on this foundation
+
+For SQL and Prisma files, Redirect first extracts table names locally and sends only the
+selected table context to Gemini. Repeating the same generation request during the
+running server process uses the local cache and does not call Gemini again. The cache is
+intentionally bounded and is cleared when the service restarts.
 
 The sample schema is available at [`test/sample.sql`](test/sample.sql). The free Render
 deployment may take several seconds to wake from a cold start. Configure `SECRET_KEY`,
@@ -109,10 +117,12 @@ Body:
   "table_name": "users",
   "method": "GET",
   "auth_mode": "Token (JWT)",
-  "language": "FastAPI",
-  "project_id": "unique-project-id"
+  "language": "FastAPI"
 }
 ```
+
+The active project is associated with the current browser session; `project_id` is not
+required in the generation request.
 
 **Cleanup**
 ```
@@ -130,6 +140,7 @@ of being embedded in generated source code.
 - AI: Google Gemini API
 - Styling: Bootstrap 5.3.2
 - Testing: pytest and GitHub Actions
+- Performance: deterministic extraction, focused AI prompts, bounded in-memory caching
 
 ## Contributing
 
