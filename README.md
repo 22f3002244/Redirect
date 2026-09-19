@@ -103,8 +103,9 @@ intentionally bounded and is cleared when the service restarts.
 
 The sample schema is available at [`test/sample.sql`](test/sample.sql). The free Render
 deployment may take several seconds to wake from a cold start. Configure `SECRET_KEY`,
-`DATABASE_URL`, and `GEMINI_API_KEY` as Render environment variables before testing the
-end-to-end flow.
+`DATABASE_URL`, `GEMINI_API_KEY`, and `GEMINI_MODEL=gemini-3.6-flash` as Render
+environment variables before testing the end-to-end flow. A manually configured Render
+environment variable overrides the value in `render.yaml`.
 
 ## API Endpoints
 
@@ -150,6 +151,11 @@ of being embedded in generated source code.
 Generated responses are cached for up to seven days, and each session has a 20-generation
 AI limit to protect free-tier quota.
 
+If generation returns HTTP 502, check the Render logs first. Confirm that
+`GEMINI_API_KEY` is valid, that the key has available quota, and that `GEMINI_MODEL`
+is set to an available model. Google may retire model names; update the Render
+environment variable and redeploy when that happens.
+
 ## Technologies
 
 - Backend: Python Flask
@@ -157,7 +163,7 @@ AI limit to protect free-tier quota.
 - AI: Google Gemini API
 - Styling: Bootstrap 5.3.2
 - Testing: pytest and GitHub Actions
-- Performance: deterministic extraction, focused AI prompts, bounded in-memory caching
+- Performance: deterministic extraction, focused AI prompts, persistent database caching
 
 ## Contributing
 
