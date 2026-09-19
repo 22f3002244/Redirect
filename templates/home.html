@@ -299,26 +299,6 @@
                     body: formData
                 });
 
-                document.getElementById('sampleBtn').addEventListener('click', async () => {
-                    const button = document.getElementById('sampleBtn');
-                    button.disabled = true;
-                    button.textContent = 'Loading sample...';
-                    try {
-                        const response = await fetch('/api/sample-upload', {
-                            method: 'POST',
-                            headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content }
-                        });
-                        const data = await response.json();
-                        if (!response.ok || !data.success) throw new Error(data.error || 'Sample upload failed');
-                        window.location.href = `/generate?project_id=${data.project_id}`;
-                    } catch (error) {
-                        errorText.textContent = error.message;
-                        errorText.style.display = 'block';
-                        button.disabled = false;
-                        button.textContent = 'Try Sample Schema';
-                    }
-                });
-
                 const data = await response.json();
 
                 if (data.success) {
@@ -342,6 +322,31 @@
                 errorText.style.display = 'block';
                 fileName.style.display = 'none';
                 fileInput.value = '';
+            }
+        });
+
+        document.getElementById('sampleBtn').addEventListener('click', async () => {
+            const button = document.getElementById('sampleBtn');
+            button.disabled = true;
+            button.textContent = 'Loading sample...';
+            try {
+                const response = await fetch('/api/sample-upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+                const responseText = await response.text();
+                const data = responseText ? JSON.parse(responseText) : {};
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || `Sample upload failed (HTTP ${response.status})`);
+                }
+                window.location.href = `/generate?project_id=${data.project_id}`;
+            } catch (error) {
+                errorText.textContent = error.message;
+                errorText.style.display = 'block';
+                button.disabled = false;
+                button.textContent = 'Try Sample Schema';
             }
         });
 

@@ -480,7 +480,7 @@
                     showNotification('Generate code before downloading.', 'error');
                     return;
                 }
-                const extension = getFileExtension(lang);
+                const extension = getFileExtension(document.getElementById('language').value);
                 const blob = new Blob([code], { type: 'text/plain' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
