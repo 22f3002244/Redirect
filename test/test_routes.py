@@ -152,3 +152,39 @@ def test_gemini_model_can_be_configured(client, monkeypatch):
         extract_tables_with_gemini("schema", "sql")
         get_client.return_value.models.generate_content.assert_called_once()
         assert get_client.return_value.models.generate_content.call_args.kwargs["model"] == "test-model"
+
+
+def test_invalid_output_mode_is_rejected(client):
+    assert upload(client).status_code == 201
+    response = client.post(
+        "/api/generate-code",
+        json={
+            "table_name": "users",
+            "method": "GET",
+            "auth_mode": "Token",
+            "language": "FastAPI",
+            "output_mode": "unknown",
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_output_mode_is_sent_to_generator(client):
+    assert upload(client).status_code == 201
+    with patch(
+        "routes.route.generate_api_code_with_gemini",
+        return_value="def endpoint():\n    return {'ok': True}",
+    ) as generate:
+        response = client.post(
+            "/api/generate-code",
+            json={
+                "table_name": "users",
+                "method": "GET",
+                "auth_mode": "Token",
+                "language": "FastAPI",
+                "output_mode": "tests",
+            },
+        )
+    assert response.status_code == 200
+    assert response.get_json()["output_mode"] == "tests"
+    assert generate.call_args.args[-1] == "tests"
