@@ -23,6 +23,7 @@ Transform database schemas into fully functional REST API code. Upload your sche
 - **Focused prompts**: SQL and Prisma requests include the selected table and related tables
 - **Free response cache**: Repeated generations are served from a bounded in-memory cache
 - **Downloadable output**: Save generated endpoints directly as framework-appropriate files
+- **Generation modes**: Create one endpoint, a full CRUD module, or an endpoint with tests
 - **Health monitoring**: Check application and database readiness at `/health`
 - **Free sample demo**: Try the built-in sample schema without preparing a file
 
@@ -92,6 +93,10 @@ Access at `http://localhost:5000`
 3. **Generate** clean API code
 4. **Copy or download** the generated endpoint
 5. **Build** your actual features on this foundation
+
+Choose an output mode before generating: **Single endpoint** keeps the original behavior,
+**Full CRUD module** generates all common operations, and **Endpoint + tests** includes a
+test starter for the selected framework.
 
 Use **Try Sample Schema** on the home page to test the complete flow immediately with a
 small `users` and `posts` schema.

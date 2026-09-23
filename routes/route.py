@@ -33,6 +33,7 @@ SUPPORTED_AUTH_MODES = {
     "OAuth (Google/GitHub login)",
     "API Keys",
 }
+SUPPORTED_OUTPUT_MODES = {"endpoint", "crud", "tests"}
 SAMPLE_SCHEMA = """CREATE TABLE users (
     id INT PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
@@ -128,13 +129,21 @@ def schema_for_table(file_content, file_extension, table_name):
     return file_content
 
 
-def generate_api_code_with_gemini(table_name, method, auth_mode, language, file_content):
+def generate_api_code_with_gemini(
+    table_name, method, auth_mode, language, file_content, output_mode="endpoint"
+):
     if len(file_content) > MAX_AI_INPUT_SIZE:
         raise GeminiError(
             "This schema is too large to process on the free-tier server. "
             "Please upload a schema smaller than 200,000 characters."
         )
-    prompt = f"""You are an expert backend developer. Generate a production-ready API endpoint function.
+    mode_instructions = {
+        "endpoint": "Generate one endpoint function for the requested HTTP method.",
+        "crud": "Generate a complete CRUD module for this table with functions for GET, POST, PUT, PATCH, and DELETE.",
+        "tests": "Generate the endpoint function followed by focused tests for it using the framework's standard test tooling.",
+    }[output_mode]
+    prompt = f"""You are an expert backend developer.
+{mode_instructions}
 Table: {table_name}
 HTTP Method: {method}
 Authentication: {auth_mode}
@@ -274,12 +283,15 @@ def generate_code():
     method = data.get("method")
     auth_mode = data.get("auth_mode")
     language = data.get("language")
+    output_mode = data.get("output_mode", "endpoint")
     project = session_project()
 
     if not all([table_name, method, auth_mode, language]):
         return jsonify({"success": False, "error": "Missing required parameters"}), 400
     if method not in SUPPORTED_METHODS or auth_mode not in SUPPORTED_AUTH_MODES:
         return jsonify({"success": False, "error": "Invalid method or authentication mode"}), 400
+    if output_mode not in SUPPORTED_OUTPUT_MODES:
+        return jsonify({"success": False, "error": "Invalid output mode"}), 400
     if not project:
         return jsonify({"success": False, "error": "Project not found or session expired"}), 404
     known_tables = project.extracted_tables or extract_tables_deterministically(
@@ -297,7 +309,7 @@ def generate_code():
     schema_context = schema_for_table(project.file_content, project.file_extension, table_name)
     cache_key = hashlib.sha256(
         "|".join([
-            schema_context, table_name, method, auth_mode, language
+            schema_context, table_name, method, auth_mode, language, output_mode
         ]).encode("utf-8")
     ).hexdigest()
     cache_available = "generation_cache" in inspect(db.engine).get_table_names()
@@ -311,13 +323,14 @@ def generate_code():
             "success": True,
             "code": cached.code,
             "language": cached.language,
+            "output_mode": output_mode,
             "syntax_valid": cached.syntax_valid,
             "cached": True,
         }), 200
 
     try:
         code = generate_api_code_with_gemini(
-            table_name, method, auth_mode, language, schema_context
+            table_name, method, auth_mode, language, schema_context, output_mode
         )
     except GeminiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
@@ -331,6 +344,7 @@ def generate_code():
                 "success": True,
                 "code": code,
                 "language": language,
+                "output_mode": output_mode,
                 "syntax_valid": syntax_valid,
                 "cached": False,
             }), 200
@@ -347,6 +361,7 @@ def generate_code():
         "success": True,
         "code": code,
         "language": language,
+        "output_mode": output_mode,
         "syntax_valid": syntax_valid,
         "cached": False,
     }), 200

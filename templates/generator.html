@@ -308,6 +308,15 @@
                     </select>
                 </div>
 
+                <div>
+                    <label class="label">Output</label>
+                    <select class="select" id="outputMode">
+                        <option value="endpoint">Single endpoint</option>
+                        <option value="crud">Full CRUD module</option>
+                        <option value="tests">Endpoint + tests</option>
+                    </select>
+                </div>
+
                 <div class="d-flex align-items-end">
                     <button id="generateBtn" class="btn btn-dark w-100">
                         <i class="bi bi-magic pe-2"></i>Generate
@@ -376,6 +385,7 @@
                 const method = document.getElementById('httpMethod').value;
                 const auth = document.getElementById('authMode').value;
                 const lang = document.getElementById('language').value;
+                const outputMode = document.getElementById('outputMode').value;
 
                 if (!table || !method) {
                     showNotification("Please select a table and method first!", 'error');
@@ -411,6 +421,7 @@
                             method: method,
                             auth_mode: auth,
                             language: lang,
+                            output_mode: outputMode,
                         })
                     });
 
