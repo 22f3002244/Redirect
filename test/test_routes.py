@@ -53,8 +53,9 @@ def test_gemini_failure_is_a_gateway_error(client):
                 "language": "FastAPI",
             },
         )
-    assert response.status_code == 502
+    assert response.status_code == 503
     assert response.get_json()["success"] is False
+    assert "temporarily unavailable" in response.get_json()["error"]
 
 
 def test_sql_tables_are_extracted_without_gemini(client):
@@ -188,3 +189,186 @@ def test_output_mode_is_sent_to_generator(client):
     assert response.status_code == 200
     assert response.get_json()["output_mode"] == "tests"
     assert generate.call_args.args[-1] == "tests"
+
+
+def test_ownership_verification_forbidden(client):
+    upload_resp = upload(client)
+    assert upload_resp.status_code == 201
+    project_id = upload_resp.get_json()["project_id"]
+
+    # User B uses a separate client session
+    user_b_client = client.application.test_client()
+
+    # User B should be forbidden (403) from reading User A's project
+    resp_get = user_b_client.get(f"/api/project/{project_id}")
+    assert resp_get.status_code == 403
+    assert "Forbidden" in resp_get.get_json()["error"]
+
+    # User B should be forbidden (403) from deleting User A's project
+    resp_del = user_b_client.delete(f"/api/project/{project_id}")
+    assert resp_del.status_code == 403
+    assert "Forbidden" in resp_del.get_json()["error"]
+
+    # User B should be forbidden (403) from cleaning up User A's project
+    resp_cleanup = user_b_client.post(f"/api/cleanup/{project_id}")
+    assert resp_cleanup.status_code == 403
+    assert "Forbidden" in resp_cleanup.get_json()["error"]
+
+    # User B should be forbidden (403) from viewing User A's project on /generate
+    resp_gen = user_b_client.get(f"/generate?project_id={project_id}")
+    assert resp_gen.status_code == 403
+
+
+def test_ownership_verification_allowed(client):
+    upload_resp = upload(client)
+    assert upload_resp.status_code == 201
+    project_id = upload_resp.get_json()["project_id"]
+
+    # User A (owner) can read project
+    resp_get = client.get(f"/api/project/{project_id}")
+    assert resp_get.status_code == 200
+    assert resp_get.get_json()["success"] is True
+    assert resp_get.get_json()["project"]["project_id"] == project_id
+
+    # User A (owner) can delete project
+    resp_del = client.delete(f"/api/project/{project_id}")
+    assert resp_del.status_code == 200
+    assert resp_del.get_json()["success"] is True
+
+    # After deletion, accessing it returns 404
+    resp_after = client.get(f"/api/project/{project_id}")
+    assert resp_after.status_code == 404
+
+
+def test_project_not_found_returns_404(client):
+    assert client.get("/api/project/nonexistent-id").status_code == 404
+    assert client.delete("/api/project/nonexistent-id").status_code == 404
+
+
+def test_sqlglot_table_extraction_standard_queries():
+    from routes.route import extract_table_names
+
+    sql = "CREATE TABLE users (id INT PRIMARY KEY); CREATE TABLE orders (id INT, user_id INT);"
+    tables = extract_table_names(sql)
+    assert tables == ["orders", "users"]
+
+
+def test_sqlglot_table_extraction_joins():
+    from routes.route import extract_table_names
+
+    sql = """
+    SELECT u.username, o.total, p.title
+    FROM users u
+    JOIN orders o ON u.id = o.user_id
+    LEFT JOIN products p ON o.product_id = p.id;
+    """
+    tables = extract_table_names(sql)
+    assert tables == ["orders", "products", "users"]
+
+
+def test_sqlglot_table_extraction_subqueries():
+    from routes.route import extract_table_names
+
+    sql = "SELECT * FROM (SELECT id, balance FROM accounts WHERE active = 1) sub WHERE balance > 100;"
+    tables = extract_table_names(sql)
+    assert tables == ["accounts"]
+
+
+def test_sqlglot_handles_invalid_sql_gracefully():
+    from routes.route import extract_table_names
+
+    tables = extract_table_names("THIS IS NOT VALID SQL AT ALL 12345!@#$")
+    assert tables == []
+
+
+def test_rate_limiter_blocks_sixth_call(rate_limited_client):
+    upload_resp = upload(rate_limited_client)
+    assert upload_resp.status_code == 201
+
+    payload = {
+        "table_name": "users",
+        "method": "GET",
+        "auth_mode": "Token",
+        "language": "FastAPI",
+    }
+
+    with patch(
+        "routes.route.generate_api_code_with_gemini",
+        return_value="def get_users(): return []",
+    ):
+        # 5 calls per minute are allowed
+        for i in range(5):
+            resp = rate_limited_client.post("/api/generate-code", json=payload)
+            assert resp.status_code == 200, f"Call {i+1} failed with status {resp.status_code}"
+
+        # 6th call should be blocked with 429
+        sixth_resp = rate_limited_client.post("/api/generate-code", json=payload)
+        assert sixth_resp.status_code == 429
+        data = sixth_resp.get_json()
+        assert data["success"] is False
+        assert "Rate limit exceeded" in data["error"]
+
+
+def test_error_never_returned_as_code_comment(client):
+    assert upload(client).status_code == 201
+    # Test that Gemini returning an error string comment causes GeminiError -> HTTP 503, never 200
+    with patch(
+        "routes.route.get_gemini_client"
+    ) as mock_gemini:
+        mock_gemini.return_value.models.generate_content.return_value.text = "# Error generating code: API quota exceeded"
+        response = client.post(
+            "/api/generate-code",
+            json={
+                "table_name": "users",
+                "method": "GET",
+                "auth_mode": "Token",
+                "language": "FastAPI",
+            },
+        )
+    assert response.status_code == 503
+    assert response.get_json()["success"] is False
+    assert "code" not in response.get_json()
+    assert "temporarily unavailable" in response.get_json()["error"]
+
+
+def test_generate_code_rejects_empty_and_invalid_parameters(client):
+    assert upload(client).status_code == 201
+
+    # Empty payload
+    resp = client.post("/api/generate-code", json={})
+    assert resp.status_code == 400
+    assert resp.get_json()["success"] is False
+
+    # Missing parameters
+    resp = client.post(
+        "/api/generate-code",
+        json={"table_name": "users", "method": "GET"},
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["success"] is False
+
+    # Invalid method
+    resp = client.post(
+        "/api/generate-code",
+        json={
+            "table_name": "users",
+            "method": "INVALID_METHOD",
+            "auth_mode": "Token",
+            "language": "FastAPI",
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["success"] is False
+
+
+def test_cleanup_explicit_with_project_id(client):
+    upload_resp = upload(client)
+    assert upload_resp.status_code == 201
+    project_id = upload_resp.get_json()["project_id"]
+
+    resp = client.post(f"/api/cleanup/{project_id}")
+    assert resp.status_code == 200
+    assert resp.get_json()["success"] is True
+
+    # Verifying project was deleted
+    assert client.get(f"/api/project/{project_id}").status_code == 404

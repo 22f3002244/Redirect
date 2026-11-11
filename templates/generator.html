@@ -204,7 +204,12 @@
     {% include 'general/nav.html' %}
     <div class="main">
         <div class="container">
-            <h1 class="title">HTTP API Code Generator</h1>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="title mb-0">HTTP API Code Generator</h1>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="closeProjectBtn">
+                    <i class="bi bi-x-circle me-1"></i> Close Project
+                </button>
+            </div>
 
             {% if extraction_error %}
             <div class="alert alert-warning" role="alert">
@@ -499,6 +504,29 @@
                 link.click();
                 URL.revokeObjectURL(link.href);
             });
+
+            const closeProjectBtn = document.getElementById('closeProjectBtn');
+            if (closeProjectBtn) {
+                closeProjectBtn.addEventListener('click', async () => {
+                    if (!confirm('Are you sure you want to close this project and clear your session?')) {
+                        return;
+                    }
+                    try {
+                        const cleanupUrl = projectId ? `/api/cleanup/${encodeURIComponent(projectId)}` : '/api/cleanup';
+                        await fetch(cleanupUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Cleanup request failed:', e);
+                    } finally {
+                        window.location.href = '/';
+                    }
+                });
+            }
 
             function getFileExtension(framework) {
                 if (['Flask', 'Django', 'FastAPI', 'Falcon', 'Pyramid', 'Tornado', 'Starlette', 'Sanic', 'Quart'].includes(framework)) return 'py';

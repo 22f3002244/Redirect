@@ -1,14 +1,15 @@
-from flask import Flask
+from flask import Flask, jsonify
 from routes.route import main
 from models.db import db
 from routes.route import limiter
+from flask_limiter.errors import RateLimitExceeded
 from flask_migrate import Migrate
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def create_app():
+def create_app(test_config=None):
     app = Flask(__name__)
     
     # Environment detection
@@ -45,11 +46,22 @@ def create_app():
     app.config["SESSION_COOKIE_SECURE"] = flask_env == "production"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+    if test_config:
+        app.config.update(test_config)
     
     # Initialize extensions
     db.init_app(app)
     Migrate(app, db)
     limiter.init_app(app)
+
+    @app.errorhandler(RateLimitExceeded)
+    def handle_rate_limit(e):
+        return jsonify({
+            "success": False,
+            "error": "Rate limit exceeded. Please try again later.",
+            "detail": getattr(e, "description", str(e))
+        }), 429
 
     @app.after_request
     def add_security_headers(response):
