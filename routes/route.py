@@ -2,6 +2,7 @@ import ast
 import hashlib
 import os
 import re
+import uuid
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
@@ -11,6 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google import genai
+import sqlglot
+from sqlglot.expressions import Table
 from werkzeug.utils import secure_filename
 
 from models.db import GenerationCache, Project, db
@@ -63,9 +66,24 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def extract_table_names(sql_query: str) -> list[str]:
+    """Deterministically extract table names via AST parsing."""
+    try:
+        parsed = sqlglot.parse(sql_query)
+        tables = {t.name for stmt in parsed if stmt for t in stmt.find_all(Table) if t.name}
+        if tables:
+            return sorted(list(tables))
+    except Exception:
+        pass  # Fall back to regex or LLM if not valid SQL
+    return []
+
+
 def extract_tables_deterministically(file_content, file_extension):
     """Extract common SQL and Prisma model names without an AI call."""
     if file_extension == "sql":
+        tables = extract_table_names(file_content)
+        if tables:
+            return tables
         matches = re.findall(
             r"\bCREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+[`\"']?([A-Za-z_][\w$]*)",
             file_content,
@@ -86,7 +104,7 @@ def extract_tables_with_gemini(file_content, file_extension):
     )
     try:
         response = get_gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"), contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), contents=prompt
         )
         return [name.strip() for name in response.text.split(",") if name.strip()]
     except Exception as exc:
@@ -158,7 +176,7 @@ Implement authentication, CRUD behavior, error handling, JSON responses with suc
 appropriate status codes, and close database connections in a finally block."""
     try:
         response = get_gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"), contents=prompt
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), contents=prompt
         )
         code = response.text.strip()
         if code.startswith("```"):
@@ -166,6 +184,8 @@ appropriate status codes, and close database connections in a finally block."""
             if lines and lines[-1].strip() == "```":
                 lines.pop()
             code = "\n".join(lines).strip()
+        if not code or code.startswith("# Error"):
+            raise GeminiError("AI model returned an empty or invalid response.")
         return code
     except Exception as exc:
         current_app.logger.warning(
@@ -216,30 +236,70 @@ def csrf_error():
     return None
 
 
+def get_session_user_id():
+    if "user_id" not in session:
+        session["user_id"] = str(uuid.uuid4())
+    return session["user_id"]
+
+
+def verify_project_owner(project_id, user_id=None):
+    if not project_id:
+        return None, (jsonify({"success": False, "error": "Project ID required"}), 400)
+    project = Project.query.filter_by(project_id=project_id).first()
+    if not project:
+        return None, (jsonify({"success": False, "error": "Project not found"}), 404)
+    current_user_id = user_id or get_session_user_id()
+    if project.owner_id and project.owner_id != current_user_id:
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "Forbidden: You do not have permission to access this project",
+            }),
+            403,
+        )
+    return project, None
+
+
 def session_project(project_id=None):
-    current_id = session.get("current_project_id")
-    if project_id and current_id != project_id:
+    user_id = get_session_user_id()
+    target_id = project_id or session.get("current_project_id")
+    if not target_id:
         return None
-    if not current_id:
+    project = Project.query.filter_by(project_id=target_id).first()
+    if not project:
         return None
-    return Project.query.filter_by(project_id=current_id).first()
+    if project.owner_id and project.owner_id != user_id:
+        return None
+    return project
 
 
 @main.route("/")
 def home():
     session.setdefault("csrf_token", os.urandom(24).hex())
+    get_session_user_id()
     return render_template("home.html")
 
 
 @main.route("/generate")
 def generator():
     project_id = request.args.get("project_id")
-    project = session_project(project_id)
     extraction_error = None
     schema_preview = ""
-    if project:
+    tables = []
+
+    if project_id:
+        project, err_response = verify_project_owner(project_id)
+        if err_response:
+            return err_response
         session.setdefault("csrf_token", os.urandom(24).hex())
         session["current_project_id"] = project.project_id
+    else:
+        project = session_project()
+        if project:
+            project_id = project.project_id
+
+    if project:
+        session.setdefault("csrf_token", os.urandom(24).hex())
         schema_preview = project.file_content[:5000]
         try:
             if project.extracted_tables is None:
@@ -252,6 +312,7 @@ def generator():
     else:
         tables = []
         project_id = None
+
     return render_template(
         "generator.html",
         tables=tables,
@@ -259,6 +320,29 @@ def generator():
         extraction_error=extraction_error,
         schema_preview=schema_preview,
     )
+
+
+@main.route("/api/project/<project_id>", methods=["GET"])
+def get_project(project_id):
+    project, err_response = verify_project_owner(project_id)
+    if err_response:
+        return err_response
+    return jsonify({"success": True, "project": project.to_dict()}), 200
+
+
+@main.route("/api/project/<project_id>", methods=["DELETE"])
+def delete_project(project_id):
+    error = csrf_error()
+    if error:
+        return error
+    project, err_response = verify_project_owner(project_id)
+    if err_response:
+        return err_response
+    db.session.delete(project)
+    db.session.commit()
+    if session.get("current_project_id") == project_id:
+        session.pop("current_project_id", None)
+    return jsonify({"success": True, "message": "Project deleted successfully"}), 200
 
 
 @main.route("/health")
@@ -273,7 +357,7 @@ def health():
 
 
 @main.route("/api/generate-code", methods=["POST"])
-@limiter.limit("10 per minute")
+@limiter.limit("5 per minute")
 def generate_code():
     error = csrf_error()
     if error:
@@ -333,7 +417,10 @@ def generate_code():
             table_name, method, auth_mode, language, schema_context, output_mode
         )
     except GeminiError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 502
+        return jsonify({
+            "success": False,
+            "error": f"AI generation service temporarily unavailable: {exc}",
+        }), 503
     session["generation_count"] = generation_count + 1
 
     syntax_valid = validate_python_code(code) if language in {"Flask", "Django", "FastAPI"} else None
@@ -397,7 +484,13 @@ def upload_file():
         old_project = session_project()
         if old_project:
             db.session.delete(old_project)
-        project = Project(filename=filename, file_content=content_str, file_extension=extension)
+        user_id = get_session_user_id()
+        project = Project(
+            filename=filename,
+            file_content=content_str,
+            file_extension=extension,
+            owner_id=user_id,
+        )
         db.session.add(project)
         db.session.commit()
         session["current_project_id"] = project.project_id
@@ -425,11 +518,13 @@ def sample_upload():
         old_project = session_project()
         if old_project:
             db.session.delete(old_project)
+        user_id = get_session_user_id()
         project = Project(
             filename="sample.sql",
             file_content=SAMPLE_SCHEMA,
             file_extension="sql",
             extracted_tables=["users", "posts"],
+            owner_id=user_id,
         )
         db.session.add(project)
         db.session.commit()
@@ -447,12 +542,16 @@ def sample_upload():
 
 
 @main.route("/api/cleanup", methods=["POST"])
-def cleanup_project():
+@main.route("/api/cleanup/<project_id>", methods=["POST"])
+def cleanup_project(project_id=None):
     error = csrf_error()
     if error:
         return error
-    project = session_project()
-    if project:
+    target_id = project_id or session.get("current_project_id")
+    if target_id:
+        project, err_response = verify_project_owner(target_id)
+        if err_response:
+            return err_response
         db.session.delete(project)
         db.session.commit()
     session.pop("current_project_id", None)

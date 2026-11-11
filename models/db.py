@@ -8,6 +8,7 @@ class Project(db.Model):
     __tablename__ = "projects"
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    owner_id = db.Column(db.String(64), nullable=True, index=True)
     filename = db.Column(db.String(255), nullable=False)
     file_content = db.Column(db.Text, nullable=False)
     file_extension = db.Column(db.String(10), nullable=False)
@@ -17,6 +18,7 @@ class Project(db.Model):
     def to_dict(self):
         return {
             'project_id': self.project_id,
+            'owner_id': self.owner_id,
             'filename': self.filename,
             'file_extension': self.file_extension,
             'extracted_tables': self.extracted_tables or [],
